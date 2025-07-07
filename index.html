@@ -556,13 +556,7 @@
       e.preventDefault();
       if (!selectedFile) return;
       isUploading = true;
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Uploading...';
-      // Show progress bar
-      progressContainer.style.display = 'block';
-      progressBar.style.width = '0%';
-      progressPercentage.textContent = '0%';
-      progressStatus.innerHTML = '<span class="icon">📤</span><span>Preparing upload...</span>';
+      // Keep button enabled and text as "Upload to Drive" during authentication
       // Hide discard button during upload
       discardBtn.style.display = 'none';
       driveLink.textContent = '';
@@ -573,9 +567,21 @@
       if (!accessToken) {
         tokenClient.requestAccessToken();
       } else {
-        uploadVideo();
+        startUpload();
       }
     });
+
+    // === Start Upload Process ===
+    function startUpload() {
+      // Hide upload button and show progress bar
+      submitBtn.classList.remove('show');
+      submitBtn.style.display = 'none';
+      progressContainer.style.display = 'block';
+      progressBar.style.width = '0%';
+      progressPercentage.textContent = '0%';
+      progressStatus.innerHTML = '<span class="icon">📤</span><span>Preparing upload...</span>';
+      uploadVideo();
+    }
 
     // === Upload Video to Google Drive ===
     async function uploadVideo() {
@@ -762,18 +768,34 @@
         callback: (tokenResponse) => {
           if (tokenResponse.error) {
             // Handle authentication error
-            driveLink.textContent = 'Authentication failed: ' + tokenResponse.error;
+            progressContainer.style.display = 'none';
+            
+            // Provide user-friendly error messages
+            let errorMessage = 'Authentication failed';
+            switch (tokenResponse.error) {
+              case 'popup_closed_by_user':
+                errorMessage = 'Authentication cancelled. Please try again.';
+                break;
+              case 'access_denied':
+                errorMessage = 'Access denied. Please allow Google Drive access.';
+                break;
+              case 'immediate_failed':
+                errorMessage = 'Authentication failed. Please try again.';
+                break;
+              default:
+                errorMessage = 'Authentication failed: ' + tokenResponse.error;
+            }
+            
+            driveLink.textContent = errorMessage;
             driveLink.classList.add('show');
             isUploading = false;
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Upload to Drive';
-            submitBtn.classList.add('show');
-            submitBtn.style.display = 'block';
+            // Button is already in correct state, just show other elements
             discardBtn.style.display = 'block';
+            addNewBtn.classList.add('show');
             return;
           }
           accessToken = tokenResponse.access_token;
-          uploadVideo();
+          startUpload();
         },
       });
     }
