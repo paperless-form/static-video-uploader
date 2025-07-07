@@ -248,11 +248,122 @@
     .drive-link-btn .icon {
       font-size: 1.2rem;
     }
+    
+    .progress-container {
+      width: 100%;
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      border-radius: 16px;
+      padding: 1.25rem;
+      margin: 1rem 0;
+      display: none;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      border: 1px solid rgba(148, 163, 184, 0.1);
+      box-sizing: border-box;
+    }
+    
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+    
+    .progress-title {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #334155;
+      margin: 0;
+    }
+    
+    .progress-percentage {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #10b981;
+      background: rgba(16, 185, 129, 0.1);
+      padding: 0.2rem 0.6rem;
+      border-radius: 10px;
+      min-width: 50px;
+      text-align: center;
+    }
+    
+    .progress-bar-wrapper {
+      width: 100%;
+      height: 10px;
+      background: rgba(148, 163, 184, 0.2);
+      border-radius: 8px;
+      overflow: hidden;
+      position: relative;
+      box-sizing: border-box;
+    }
+    
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #10b981 0%, #059669 50%, #047857 100%);
+      border-radius: 8px;
+      width: 0%;
+      transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+    }
+    
+    .progress-bar::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+      animation: shimmer 2s infinite;
+    }
+    
+    @keyframes shimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+    
+    .progress-status {
+      text-align: center;
+      color: #64748b;
+      font-size: 0.75rem;
+      font-weight: 500;
+      margin-top: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+    }
+    
+    .progress-status .icon {
+      font-size: 1rem;
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
     @media (max-width: 768px) {
       .container {
         padding: 1.5rem 1rem;
         max-width: 95vw;
         gap: 1rem;
+      }
+      .progress-container {
+        padding: 1rem;
+        margin: 0.75rem 0;
+      }
+      .progress-title {
+        font-size: 0.8rem;
+      }
+      .progress-percentage {
+        font-size: 0.7rem;
+        padding: 0.15rem 0.5rem;
+        min-width: 45px;
+      }
+      .progress-status {
+        font-size: 0.7rem;
+        margin-top: 0.4rem;
       }
       h2 {
         font-size: 1.5rem;
@@ -325,6 +436,19 @@
           </div>
         </div>
       </div>
+      <div class="progress-container" id="progressContainer">
+        <div class="progress-header">
+          <h3 class="progress-title">Uploading to Google Drive</h3>
+          <div class="progress-percentage" id="progressPercentage">0%</div>
+        </div>
+        <div class="progress-bar-wrapper">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <div class="progress-status" id="progressStatus">
+          <span class="icon">📤</span>
+          <span>Preparing upload...</span>
+        </div>
+      </div>
       <button type="submit" id="submitBtn">Upload to Drive</button>
     </form>
     <button type="button" class="add-new-btn" id="addNewBtn">Discard & Add New</button>
@@ -354,6 +478,10 @@
     const uploadForm = document.getElementById('uploadForm');
     const driveLink = document.getElementById('driveLink');
     const driveLinkBtn = document.getElementById('driveLinkBtn');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressBar = document.getElementById('progressBar');
+    const progressPercentage = document.getElementById('progressPercentage');
+    const progressStatus = document.getElementById('progressStatus');
 
     let selectedFile = null;
     let gapiInited = false;
@@ -430,6 +558,11 @@
       isUploading = true;
       submitBtn.disabled = true;
       submitBtn.textContent = 'Uploading...';
+      // Show progress bar
+      progressContainer.style.display = 'block';
+      progressBar.style.width = '0%';
+      progressPercentage.textContent = '0%';
+      progressStatus.innerHTML = '<span class="icon">📤</span><span>Preparing upload...</span>';
       // Hide discard button during upload
       discardBtn.style.display = 'none';
       driveLink.textContent = '';
@@ -455,7 +588,7 @@
       const delimiter = "\r\n--" + boundary + "\r\n";
       const close_delim = "\r\n--" + boundary + "--";
       const reader = new FileReader();
-      reader.onload = async function(e) {
+      reader.onload = function(e) {
         const content = e.target.result;
         const multipartRequestBody =
           delimiter +
@@ -465,54 +598,109 @@
           'Content-Type: ' + selectedFile.type + '\r\n\r\n' +
           content +
           close_delim;
-        try {
-          const response = await fetch(
-            'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink,webContentLink',
-            {
-              method: 'POST',
-              headers: {
-                'Authorization': 'Bearer ' + accessToken,
-                'Content-Type': 'multipart/related; boundary=' + boundary,
-              },
-              body: multipartRequestBody,
-            }
-          );
-          const data = await response.json();
-          if (data.id) {
-            // Make file shareable
-            await fetch(`https://www.googleapis.com/drive/v3/files/${data.id}/permissions`, {
-              method: 'POST',
-              headers: {
-                'Authorization': 'Bearer ' + accessToken,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                role: 'reader',
-                type: 'anyone',
-              }),
-            });
-            driveLink.textContent = 'Uploaded successfully!';
-            driveLink.classList.add('show');
-            driveLinkBtn.href = data.webViewLink;
-            driveLinkBtn.style.display = 'inline-flex';
-            driveLinkBtn.classList.add('show');
-            addNewBtn.classList.add('show');
-            // Hide upload button after upload
-            submitBtn.classList.remove('show');
-            submitBtn.style.display = 'none';
-          } else {
-            driveLink.textContent = 'Upload failed.';
-            driveLink.classList.add('show');
+        
+        const xhr = new XMLHttpRequest();
+        
+        xhr.upload.addEventListener('progress', function(e) {
+          if (e.lengthComputable) {
+            const percentComplete = (e.loaded / e.total) * 100;
+            const roundedPercent = Math.round(percentComplete);
+            progressBar.style.width = percentComplete + '%';
+            progressPercentage.textContent = roundedPercent + '%';
+            progressStatus.innerHTML = '<span class="icon">📤</span><span>Uploading... ' + roundedPercent + '%</span>';
           }
-        } catch (err) {
-          driveLink.textContent = 'Error uploading: ' + err;
+        });
+        
+        xhr.addEventListener('load', async function() {
+          if (xhr.status === 200) {
+            const data = JSON.parse(xhr.responseText);
+            if (data.id) {
+              progressStatus.innerHTML = '<span class="icon">🔒</span><span>Setting permissions...</span>';
+              // Make file shareable
+              try {
+                await fetch(`https://www.googleapis.com/drive/v3/files/${data.id}/permissions`, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': 'Bearer ' + accessToken,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    role: 'reader',
+                    type: 'anyone',
+                  }),
+                });
+                progressBar.style.width = '100%';
+                progressPercentage.textContent = '100%';
+                progressStatus.innerHTML = '<span class="icon">✅</span><span>Upload completed!</span>';
+                setTimeout(() => {
+                  progressContainer.style.display = 'none';
+                  driveLink.textContent = 'Uploaded successfully!';
+                  driveLink.classList.add('show');
+                  driveLinkBtn.href = data.webViewLink;
+                  driveLinkBtn.style.display = 'inline-flex';
+                  driveLinkBtn.classList.add('show');
+                  addNewBtn.classList.add('show');
+                  // Hide upload button after upload
+                  submitBtn.classList.remove('show');
+                  submitBtn.style.display = 'none';
+                  // Reset upload state for successful upload
+                  isUploading = false;
+                  submitBtn.disabled = false;
+                  submitBtn.textContent = 'Upload to Drive';
+                  discardBtn.style.display = 'block';
+                }, 1500);
+              } catch (err) {
+                progressContainer.style.display = 'none';
+                driveLink.textContent = 'Upload successful but permission setting failed: ' + err;
+                driveLink.classList.add('show');
+                submitBtn.classList.add('show');
+                submitBtn.style.display = 'block';
+                isUploading = false;
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Upload to Drive';
+                discardBtn.style.display = 'block';
+              }
+            } else {
+              progressContainer.style.display = 'none';
+              driveLink.textContent = 'Upload failed: ' + (data.error?.message || 'Unknown error');
+              driveLink.classList.add('show');
+              // Reset button state on upload failure
+              submitBtn.classList.add('show');
+              submitBtn.style.display = 'block';
+              isUploading = false;
+              submitBtn.disabled = false;
+              submitBtn.textContent = 'Upload to Drive';
+              discardBtn.style.display = 'block';
+            }
+          } else {
+            progressContainer.style.display = 'none';
+            driveLink.textContent = 'Upload failed with status: ' + xhr.status;
+            driveLink.classList.add('show');
+            submitBtn.classList.add('show');
+            submitBtn.style.display = 'block';
+            isUploading = false;
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Upload to Drive';
+            discardBtn.style.display = 'block';
+          }
+        });
+        
+        xhr.addEventListener('error', function() {
+          progressContainer.style.display = 'none';
+          driveLink.textContent = 'Network error during upload';
           driveLink.classList.add('show');
-        }
-        isUploading = false;
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Upload to Drive';
-        // Show discard button again after upload
-        discardBtn.style.display = 'block';
+          submitBtn.classList.add('show');
+          submitBtn.style.display = 'block';
+          isUploading = false;
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Upload to Drive';
+          discardBtn.style.display = 'block';
+        });
+        
+        xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink,webContentLink');
+        xhr.setRequestHeader('Authorization', 'Bearer ' + accessToken);
+        xhr.setRequestHeader('Content-Type', 'multipart/related; boundary=' + boundary);
+        xhr.send(multipartRequestBody);
       };
       reader.readAsBinaryString(selectedFile);
     }
@@ -543,6 +731,10 @@
       driveLinkBtn.style.display = 'none';
       driveLinkBtn.classList.remove('show');
       discardBtn.style.display = 'block';
+      progressContainer.style.display = 'none';
+      progressBar.style.width = '0%';
+      progressPercentage.textContent = '0%';
+      progressStatus.innerHTML = '<span class="icon">📤</span><span>Preparing upload...</span>';
       isUploading = false;
     }
 
@@ -568,6 +760,18 @@
         client_id: CLIENT_ID,
         scope: SCOPES,
         callback: (tokenResponse) => {
+          if (tokenResponse.error) {
+            // Handle authentication error
+            driveLink.textContent = 'Authentication failed: ' + tokenResponse.error;
+            driveLink.classList.add('show');
+            isUploading = false;
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Upload to Drive';
+            submitBtn.classList.add('show');
+            submitBtn.style.display = 'block';
+            discardBtn.style.display = 'block';
+            return;
+          }
           accessToken = tokenResponse.access_token;
           uploadVideo();
         },
